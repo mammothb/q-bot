@@ -185,11 +185,12 @@ class Streamers(Plugin):
             if not guild:
                 continue
 
-            for channel_id in guild._channels:
-                if (isinstance(guild._channels[channel_id], TextChannel) and
-                        guild._channels[channel_id].name == "bot-test"):
-                    announcement_channel = self.client.get_channel(channel_id)
-            announcement_message = "{streamer} is now live on {link} !"
+            async with aiosqlite.connect(self.db.path) as conn:
+                cursor = await conn.execute(
+                    "SELECT announcement_channel, announcement_text FROM "
+                    "guilds WHERE id=?", (guild.id,))
+                announcement_channel, announcement_text = await cursor.fetchone()
+                await cursor.close()
             async with aiosqlite.connect(self.db.path) as conn:
                 cursor = await conn.execute(
                     "SELECT id FROM streamers_{} WHERE online = 1".format(
@@ -204,8 +205,8 @@ class Streamers(Plugin):
                     continue
                 try:
                     await self.client.send_message(
-                        announcement_channel.id,
-                        announcement_message.replace(
+                        announcement_channel,
+                        announcement_text.replace(
                             "{streamer}", streamer.name
                         ).replace(
                             "{link}", streamer.link
