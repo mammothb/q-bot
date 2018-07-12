@@ -11,6 +11,7 @@ def bg_task(sleep_time, ignore_errors=True):
         @wraps(func)
         async def wrapper(self):
             await self.client.wait_until_ready()
+            await self.wait_until_ready()
             while True:
                 if ignore_errors:
                     try:

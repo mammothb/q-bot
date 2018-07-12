@@ -6,6 +6,7 @@ LOG = logging.getLogger("discord")
 class PluginManager:
     def __init__(self, client):
         self.client = client
+        self.db = client.db
         self.client.plugins = []
 
     def load(self, plugin):

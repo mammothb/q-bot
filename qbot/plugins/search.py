@@ -12,7 +12,7 @@ class Search(Plugin):
     @command(db_name="youtube",
              pattern="^" + PREFIX + "youtube (.*)",
              db_check=True,
-             usage="!youtube video_name")
+             usage=PREFIX + "youtube video_name")
     async def youtube(self, message, args):
         search = args[0]
         url = "https://www.googleapis.com/youtube/v3/search"
@@ -32,7 +32,7 @@ class Search(Plugin):
     @command(db_name="twitch",
              pattern="^" + PREFIX + "twitch (.*)",
              db_check=True,
-             usage="!twitch streamer_name")
+             usage=PREFIX + "twitch streamer_name")
     async def twitch(self, message, args):
         search = args[0]
         url = "https://api.twitch.tv/kraken/search/channels"

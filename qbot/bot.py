@@ -3,11 +3,12 @@ import logging
 # import os
 import shelve
 
+import aiosqlite
 import discord
-from discord.channel import DMChannel
+from discord.channel import DMChannel, TextChannel
 
 from qbot.config import DB_PATH
-# from qbot.database import Db
+from qbot.database import Db
 from qbot.pluginmanager import PluginManager
 
 LOG = logging.getLogger("discord")
@@ -15,11 +16,11 @@ LOG = logging.getLogger("discord")
 class QBot(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # self.db = shelve.open(DB_PATH)
+        self.db = Db(DB_PATH, self.loop)
         self.plugin_manager = PluginManager(self)
         self.plugin_manager.load_all()
         self.last_messages = []
-        self.db = shelve.open(DB_PATH)
-        # self.db = Db(DB_PATH, self.loop)
 
         if self.shard_id is not None:
             self.shard = [self.shard_id, self.shard_count]
@@ -36,7 +37,7 @@ class QBot(discord.Client):
         """
         LOG.info("Logged in")
 
-        self.add_all_guilds()
+        await self.add_all_guilds()
         for plugin in self.plugins:
             self.loop.create_task(plugin.on_ready())
 
@@ -59,11 +60,21 @@ class QBot(discord.Client):
         for plugin in self.plugins:
             self.loop.create_task(plugin._on_message(message))
 
-    def add_all_guilds(self):
+    async def add_all_guilds(self):
         """Syncing all the guilds to the DB"""
         LOG.debug("Syncing guilds and db")
         for guild in self.guilds:
             LOG.debug("Adding guild %d\"s id to db", guild.id)
-            path = DB_PATH.replace("guild_list", str(guild.id))
-            with shelve.open(path):
-                self.db[str(guild.id)] = path
+            for channel_id in guild._channels:
+                if (isinstance(guild._channels[channel_id], TextChannel) and
+                        guild._channels[channel_id].name == "general"):
+                    announcement_channel = channel_id
+                    break
+            async with aiosqlite.connect(self.db.path) as conn:
+                await conn.execute(
+                    "INSERT OR IGNORE INTO guilds "
+                    "(id,name,announcement_channel,announcement_text) "
+                    "VALUES(?,?,?,?)",
+                    (guild.id, guild.name, announcement_channel,
+                     "{streamer} is now live on {link} !"))
+                await conn.commit()

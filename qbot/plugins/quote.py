@@ -9,7 +9,7 @@ class Quote(Plugin):
     @command(db_name="quote",
              pattern="^" + PREFIX + "quote (.*)",
              db_check=True,
-             usage="!quote msg_id")
+             usage=PREFIX + "quote msg_id")
     async def quote(self, message, args):
         msg_id = args[0]
         msg = await self.client.get_message(message.channel.id, msg_id)

@@ -21,7 +21,7 @@ class Plugin(object, metaclass=PluginMount):
 
     def __init__(self, client):
         self.client = client
-        # self.db = client.db
+        self.db = client.db
         self.commands = {}
         self.bg_tasks = {}
 
@@ -36,11 +36,8 @@ class Plugin(object, metaclass=PluginMount):
         LOG.info("Registered %d commands / %d bg tasks", len(self.commands),
                  len(self.bg_tasks))
 
-    def get_storage(self, guild):
-        return shelve.open(self.client.db[str(guild.id)])
-
-    # async def get_storage(self, guild):
-    #     return await self.client.sqlitedb.get_storage(self, guild)
+    async def get_storage(self, guild):
+        return await self.client.db.get_storage(self, guild)
 
     async def on_ready(self):
         pass
