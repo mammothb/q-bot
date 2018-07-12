@@ -126,7 +126,6 @@ class Streamers(Plugin):
                                 "UPDATE streamers_{} SET online = 0 WHERE "
                                 "name='{}'".format(guild.id, streamer))
                             await conn.commit()
-                        LOG.info("Streamer %s went offline", streamer)
 
             except Exception as e:
                 LOG.info("Cannot gather live streamers from %s", platform.name)
