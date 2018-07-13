@@ -1,8 +1,9 @@
-import re
-import logging
 import asyncio
-
 from functools import wraps
+import logging
+import re
+
+from qbot.const import PREFIX
 
 LOG = logging.getLogger("discord")
 
@@ -31,13 +32,10 @@ def bg_task(sleep_time, ignore_errors=True):
 
     return actual_decorator
 
-def command(pattern=None, db_check=False, user_check=None, db_name=None,
-            require_role="", require_one_of_roles="", banned_role="",
-            banned_roles="", cooldown=0, global_cooldown=0,
-            description="", usage=None):
+def command(pattern=None, user_check=None, description="", usage=None):
     def actual_decorator(func):
         name = func.__name__
-        cmd_name = "!" + name
+        cmd_name = PREFIX + name
         prog = re.compile(pattern or cmd_name)
         @wraps(func)
         async def wrapper(self, message):
@@ -47,42 +45,12 @@ def command(pattern=None, db_check=False, user_check=None, db_name=None,
                 return False
 
             args = match.groups()
-            guild = message.guild
             author = message.author
-            author_role_ids = [role.id for role in author.roles]
-            # storage = await self.get_storage(guild)
 
             is_owner = author.guild.owner.id == author.id
 
             perms = author.guild_permissions
             is_admin = perms.manage_guild or perms.administrator or is_owner
-
-            # # Checking if the command is enabled
-            # if db_check:
-            #     check = await storage.get(db_name or name)
-            #     if not check:
-            #         return
-
-            # # Cooldown
-            # if isinstance(cooldown, str):
-            #     cooldown_dur = 0
-            # else:
-            #     cooldown_dur = cooldown
-
-            # if isinstance(global_cooldown, str):
-            #     global_cooldown_dur = 0
-            # else:
-            #     global_cooldown_dur = global_cooldown
-
-            # if global_cooldown_dur != 0:
-            #     check = await storage.get("cooldown:" + name)
-            #     if check:
-            #         return
-
-            # if cooldown_dur != 0:
-            #     check = await storage.get("cooldown:" + name + ":" + author.id)
-            #     if check:
-            #         return
 
             # Checking the member with the predicate
             if user_check and not is_admin:
@@ -90,55 +58,16 @@ def command(pattern=None, db_check=False, user_check=None, db_name=None,
                 if not authorized:
                     return
 
-            # # Checking roles
-            # if require_role and not is_admin:
-            #     role_id = await storage.get(require_role)
-            #     if role_id not in author_role_ids:
-            #         return
-
-            # if require_one_of_roles and not is_admin:
-            #     role_ids = await storage.smembers(require_one_of_roles)
-            #     authorized = False
-            #     for role in author.roles:
-            #         if role.id in role_ids:
-            #             authorized = True
-            #             break
-
-            #     if not authorized:
-            #         return
-
-            # if banned_role:
-            #     role_id = await storage.get(banned_role)
-            #     if role_id in author_role_ids:
-            #         return
-
-            # if banned_roles:
-            #     role_ids = await storage.smembers(banned_roles)
-            #     if any([role_id in author_role_ids
-            #             for role_id in role_ids]):
-            #         return
-
             LOG.info("%s#%s@%s >> %s", message.author.name,
                      message.author.discriminator, message.guild.name,
                      message.clean_content)
-            # if global_cooldown_dur != 0:
-            #     await storage.set("cooldown:" + name, "1")
-            #     await storage.expire("cooldown:" + name, global_cooldown_dur)
-
-            # if cooldown_dur != 0:
-            #     await storage.set("cooldown:" + name + ":" + author.id, "1")
-            #     await storage.expire("cooldown:" + name + ":" + author.id,
-            #                          global_cooldown_dur)
 
             await func(self, message, args)
-        wrapper._db_check = db_check
-        wrapper._db_name = db_name or func.__name__
         wrapper._is_command = True
         if usage:
             command_name = usage
         else:
             command_name = "!" + func.__name__
-        wrapper.info = {"name": command_name,
-                        "description": description}
+        wrapper.info = {"name": command_name, "description": description}
         return wrapper
     return actual_decorator

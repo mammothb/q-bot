@@ -2,8 +2,6 @@ import logging
 
 import aiosqlite
 
-from qbot.storage import Storage
-
 LOG = logging.getLogger("discord")
 
 class Db(object):
@@ -20,9 +18,3 @@ class Db(object):
                                "announcement_channel INTEGER NOT NULL,"
                                "announcement_text TEXT NOT NULL);")
             await conn.commit()
-
-    async def get_storage(self, plugin, guild):
-        conn = aiosqlite.connect(self.path)
-        namespace = "{}.{}:".format(plugin.__class__.__name__, guild.id)
-        storage = Storage(namespace, conn)
-        return storage

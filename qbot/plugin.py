@@ -36,9 +36,6 @@ class Plugin(object, metaclass=PluginMount):
         LOG.info("Registered %d commands / %d bg tasks", len(self.commands),
                  len(self.bg_tasks))
 
-    async def get_storage(self, guild):
-        return await self.client.db.get_storage(self, guild)
-
     async def on_ready(self):
         pass
 

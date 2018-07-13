@@ -1,7 +1,4 @@
-# import json
 import logging
-# import os
-import shelve
 
 import aiosqlite
 import discord

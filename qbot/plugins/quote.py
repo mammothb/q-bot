@@ -6,9 +6,8 @@ from qbot.decorators import command
 from qbot.plugin import Plugin
 
 class Quote(Plugin):
-    @command(db_name="quote",
-             pattern="^" + PREFIX + "quote (.*)",
-             db_check=True,
+    @command(pattern="^" + PREFIX + "quote (.*)",
+             description="Format quote message as a code block",
              usage=PREFIX + "quote msg_id")
     async def quote(self, message, args):
         msg_id = args[0]

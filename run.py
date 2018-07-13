@@ -5,6 +5,7 @@ from qbot import config
 from qbot.bot import QBot
 
 # Load plugins by importing them
+from qbot.plugins.help import Help
 from qbot.plugins.quote import Quote
 from qbot.plugins.search import Search
 from qbot.plugins.streamers import Streamers

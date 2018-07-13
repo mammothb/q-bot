@@ -9,9 +9,8 @@ from qbot.plugin import Plugin
 NOT_FOUND = "I didn't find anything 😢..."
 
 class Search(Plugin):
-    @command(db_name="youtube",
-             pattern="^" + PREFIX + "youtube (.*)",
-             db_check=True,
+    @command(pattern="^" + PREFIX + "youtube (.*)",
+             description="Search for YouTube videos",
              usage=PREFIX + "youtube video_name")
     async def youtube(self, message, args):
         search = args[0]
@@ -29,9 +28,8 @@ class Search(Plugin):
 
         await self.client.send_message(message.channel.id, response)
 
-    @command(db_name="twitch",
-             pattern="^" + PREFIX + "twitch (.*)",
-             db_check=True,
+    @command(pattern="^" + PREFIX + "twitch (.*)",
+             description="Search for Twitch streamers",
              usage=PREFIX + "twitch streamer_name")
     async def twitch(self, message, args):
         search = args[0]

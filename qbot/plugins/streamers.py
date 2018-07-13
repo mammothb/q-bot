@@ -2,12 +2,10 @@ from collections import defaultdict
 
 import asyncio
 import logging
-import json
 import re
 
 import aiohttp
 import aiosqlite
-from discord.channel import TextChannel
 
 from qbot.config import TWITCH_CLIENT_ID
 from qbot.const import PREFIX
@@ -18,9 +16,8 @@ LOG = logging.getLogger("discord")
 NOT_FOUND = "I didn't find anything 😢..."
 
 class Platform:
-    def __init__(self, name, db_name=None):
+    def __init__(self, name):
         self.name = name
-        self.db_name = db_name or name
 
     def collector(self, collector_func):
         self.collector = collector_func
@@ -33,7 +30,7 @@ class Streamer:
         self.stream_id = stream_id
 
 # Twitch
-TWITCH_PLATFORM = Platform("twitch", db_name="streamers")
+TWITCH_PLATFORM = Platform("twitch")
 
 @TWITCH_PLATFORM.collector
 async def twitch_collector(streamers):
@@ -55,7 +52,6 @@ async def twitch_collector(streamers):
                         str(stream["_id"])
                     )
                     live_streamers.append(streamer)
-
     return live_streamers
 
 class Streamers(Plugin):
@@ -113,6 +109,7 @@ class Streamers(Plugin):
                 live_streamers = await platform.collector(streamers)
                 for guild, guild_streamers in temp_data.items():
                     for streamer in live_streamers:
+                        print(streamer.name)
                         if streamer.name in guild_streamers:
                             data[guild.id].append(streamer)
                 streamer_names = [streamer.name for streamer in live_streamers]
@@ -133,9 +130,8 @@ class Streamers(Plugin):
                 LOG.info(e)
         return data
 
-    @command(db_name="streamer",
-             pattern="^" + PREFIX + "streamer (.*)",
-             db_check=True,
+    @command(pattern="^" + PREFIX + "streamer (.*)",
+             description="Add or remove Twitch streamer from notification",
              usage=PREFIX + "streamer streamer_name")
     async def streamer(self, message, args):
         cmd = args[0].split(" ")
@@ -146,24 +142,24 @@ class Streamers(Plugin):
         op = cmd[0]
         streamer_name = cmd[1]
         if op == "add":
-            url = ("https://api.twitch.tv/kraken/streams"
-                   "?channel={}&limit=1".format(streamer_name))
+            url = "https://api.twitch.tv/kraken/search/channels"
             async with aiohttp.ClientSession() as session:
-                params = {"client_id": TWITCH_CLIENT_ID}
+                params = {"q": streamer_name, "client_id": TWITCH_CLIENT_ID}
+                # Check if channel exist
                 async with session.get(url, params=params) as resp:
-                    result = await resp.json()
-                    if not result["streams"]:
-                        response = NOT_FOUND
-                    for stream in result["streams"]:
-                        async with aiosqlite.connect(self.db.path) as conn:
-                            await conn.execute(
-                                "INSERT OR IGNORE INTO streamers_{} "
-                                "(name,id,online) VALUES(?,?,?)".format(
-                                    message.guild.id),
-                                (streamer_name, str(stream["_id"]), 0))
-                            await conn.commit()
-                            response = "Added streamer {}!".format(
-                                streamer_name)
+                    data = await resp.json()
+                if not data["channels"]:
+                    response = NOT_FOUND
+                else:
+                    # write entry using channel name instead of display name
+                    async with aiosqlite.connect(self.db.path) as conn:
+                        await conn.execute(
+                            "INSERT OR IGNORE INTO streamers_{} "
+                            "(name,online) VALUES(?,?)".format(
+                                message.guild.id),
+                            (data["channels"][0]["name"], 0))
+                        await conn.commit()
+                        response = "Added streamer {}!".format(streamer_name)
         elif op == "rm":
             async with aiosqlite.connect(self.db.path) as conn:
                 await conn.execute(
@@ -200,6 +196,7 @@ class Streamers(Plugin):
             streamer_ids = [id[0] for id in streamer_ids
                             if id[0] != "" and id[0] is not None]
             for streamer in live_streamers:
+                print(streamer)
                 checked = streamer.stream_id in streamer_ids
                 if checked:
                     continue
