@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+##!/usr/bin/python3
 import logging
 
 from qbot import config
@@ -9,6 +9,7 @@ from qbot.plugins.help import Help
 from qbot.plugins.quote import Quote
 from qbot.plugins.search import Search
 from qbot.plugins.streamers import Streamers
+from qbot.plugins.youtubers import Youtubers
 
 logging.basicConfig(level=logging.INFO)
 

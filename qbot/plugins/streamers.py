@@ -135,7 +135,7 @@ class Streamers(Plugin):
     async def streamer(self, message, args):
         cmd = args[0].split(" ")
         if len(cmd) != 2:
-            response = "Nont enough arguments"
+            response = "Not enough arguments"
             await self.client.send_message(message.channel.id, response)
             return
         op = cmd[0]
