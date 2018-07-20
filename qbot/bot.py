@@ -13,7 +13,6 @@ LOG = logging.getLogger("discord")
 class QBot(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.db = shelve.open(DB_PATH)
         self.db = Db(DB_PATH, self.loop)
         self.plugin_manager = PluginManager(self)
         self.plugin_manager.load_all()

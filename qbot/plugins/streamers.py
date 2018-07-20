@@ -109,7 +109,6 @@ class Streamers(Plugin):
                 live_streamers = await platform.collector(streamers)
                 for guild, guild_streamers in temp_data.items():
                     for streamer in live_streamers:
-                        print(streamer.name)
                         if streamer.name in guild_streamers:
                             data[guild.id].append(streamer)
                 streamer_names = [streamer.name for streamer in live_streamers]
@@ -196,7 +195,6 @@ class Streamers(Plugin):
             streamer_ids = [id[0] for id in streamer_ids
                             if id[0] != "" and id[0] is not None]
             for streamer in live_streamers:
-                print(streamer)
                 checked = streamer.stream_id in streamer_ids
                 if checked:
                     continue
