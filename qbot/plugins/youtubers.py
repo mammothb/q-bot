@@ -173,7 +173,7 @@ class Youtubers(Plugin):
 
         await self.client.send_message(message.channel.id, response)
 
-    @bg_task(30)
+    @bg_task(60 * 60)
     async def youtuber_check(self):
         data = await self.get_youtubers_by_guilds()
         for guild_id, latest_videos in data.items():

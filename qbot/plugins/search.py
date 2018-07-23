@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import json
+
 import aiohttp
 
 from qbot.config import GOOGLE_API_KEY, TWITCH_CLIENT_ID
@@ -43,6 +45,40 @@ class Search(Plugin):
             response = "\n**" + channel["display_name"] + "**: " + channel["url"]
             response += " {0[followers]} followers & {0[views]} views".format(
                 channel)
+        else:
+            response = NOT_FOUND
+
+        await self.client.send_message(message.channel.id, response)
+
+    @command(pattern="^" + PREFIX + "wiki (.*)",
+             description="Search for Wikipedia pages",
+             usage=PREFIX + "wiki <search terms>")
+    async def wiki(self, message, args):
+        search = args[0]
+        url = "https://en.wikipedia.org/w/api.php"
+        async with aiohttp.ClientSession() as session:
+            params = {
+                "action": "query",
+                "format": "json",
+                "list": "search",
+                "srlimit": "1",
+                "srsearch": search
+            }
+            async with session.get(url, params=params) as resp:
+                data = await resp.json()
+        if data["query"]["searchinfo"]["totalhits"] > 0:
+            page_id = str(data["query"]["search"][0]["pageid"])
+            async with aiohttp.ClientSession() as session:
+                params = {
+                    "action": "query",
+                    "format": "json",
+                    "prop": "info",
+                    "pageids": page_id,
+                    "inprop": "url"
+                }
+                async with session.get(url, params=params) as resp:
+                    data = await resp.json()
+            response = data["query"]["pages"][page_id]["fullurl"]
         else:
             response = NOT_FOUND
 
