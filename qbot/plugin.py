@@ -1,19 +1,18 @@
 import inspect
 import logging
-import shelve
 
 from discord.errors import Forbidden
 
 LOG = logging.getLogger("discord")
 
 class PluginMount(type):
-
-    def __init__(cls, name, bases, attrs):
+    def __init__(cls, name, bases, attrs):  # pylint: disable=W0613
         """Called when a Plugin derived class is imported"""
         if not hasattr(cls, "plugins"):
             cls.plugins = []
         else:
             cls.plugins.append(cls)
+        super(PluginMount, cls).__init__(name, bases, attrs)
 
 class Plugin(object, metaclass=PluginMount):
     is_global = False

@@ -13,7 +13,8 @@ LOG = logging.getLogger("discord")
 class QBot(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.db = Db(DB_PATH, self.loop)
+        self.db = Db(DB_PATH, self.loop)  # pylint: disable=C0103
+        self.plugins = []
         self.plugin_manager = PluginManager(self)
         self.plugin_manager.load_all()
         self.last_messages = []
@@ -23,8 +24,8 @@ class QBot(discord.Client):
         else:
             self.shard = [0, 1]
 
-    def run(self, *args):
-        self.loop.run_until_complete(self.start(*args))
+    def run(self, *args, **kwargs):
+        self.loop.run_until_complete(self.start(*args, **kwargs))
 
     async def on_ready(self):
         """Called when the bot is ready.
@@ -53,6 +54,7 @@ class QBot(discord.Client):
         if message.author.__class__ != discord.Member:
             return
 
+        # pylint: disable=W0212
         for plugin in self.plugins:
             self.loop.create_task(plugin._on_message(message))
 
@@ -61,6 +63,7 @@ class QBot(discord.Client):
         LOG.debug("Syncing guilds and db")
         for guild in self.guilds:
             LOG.debug("Adding guild %d\"s id to db", guild.id)
+            # pylint: disable=W0212
             for channel_id in guild._channels:
                 if (isinstance(guild._channels[channel_id], TextChannel) and
                         guild._channels[channel_id].name == "general"):

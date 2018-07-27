@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
-
 import aiohttp
 
 from qbot.config import GOOGLE_API_KEY, TWITCH_CLIENT_ID
@@ -11,25 +9,6 @@ from qbot.plugin import Plugin
 NOT_FOUND = "I didn't find anything 😢..."
 
 class Search(Plugin):
-    @command(pattern="^" + PREFIX + "youtube (.*)",
-             description="Search for YouTube videos",
-             usage=PREFIX + "youtube video_name")
-    async def youtube(self, message, args):
-        search = args[0]
-        url = "https://www.googleapis.com/youtube/v3/search"
-        async with aiohttp.ClientSession() as session:
-            params = {"type": "video", "q": search, "part": "snippet",
-                      "key": GOOGLE_API_KEY}
-            async with session.get(url, params=params) as resp:
-                data = await resp.json()
-        if data["items"]:
-            video = data["items"][0]
-            response = "https://youtu.be/" + video["id"]["videoId"]
-        else:
-            response = NOT_FOUND
-
-        await self.client.send_message(message.channel.id, response)
-
     @command(pattern="^" + PREFIX + "twitch (.*)",
              description="Search for Twitch streamers",
              usage=PREFIX + "twitch streamer_name")
@@ -45,6 +24,48 @@ class Search(Plugin):
             response = "\n**" + channel["display_name"] + "**: " + channel["url"]
             response += " {0[followers]} followers & {0[views]} views".format(
                 channel)
+        else:
+            response = NOT_FOUND
+
+        await self.client.send_message(message.channel.id, response)
+
+    @command(pattern="^" + PREFIX + "urbandict (.*)",
+             description="Search for Urban Dictionary phrases",
+             usage=PREFIX + "urbandict phrase")
+    async def urbandict(self, message, args):
+        search = args[0]
+        url = "https://api.urbandictionary.com/v0/define"
+        async with aiohttp.ClientSession() as session:
+            params = {"term": search}
+            async with session.get(url, params=params) as resp:
+                data = await resp.json()
+        if data["list"]:
+            response = ("{}\n**Word:** {}\n**Definition:** {}\n"
+                        "**Example:** {}".format(
+                            data["list"][0]["permalink"],
+                            data["list"][0]["word"],
+                            data["list"][0]["definition"],
+                            data["list"][0]["example"]))
+            response = response.replace("[", "").replace("]", "")
+        else:
+            response = NOT_FOUND
+
+        await self.client.send_message(message.channel.id, response)
+
+    @command(pattern="^" + PREFIX + "youtube (.*)",
+             description="Search for YouTube videos",
+             usage=PREFIX + "youtube video_name")
+    async def youtube(self, message, args):
+        search = args[0]
+        url = "https://www.googleapis.com/youtube/v3/search"
+        async with aiohttp.ClientSession() as session:
+            params = {"type": "video", "q": search, "part": "snippet",
+                      "key": GOOGLE_API_KEY}
+            async with session.get(url, params=params) as resp:
+                data = await resp.json()
+        if data["items"]:
+            video = data["items"][0]
+            response = "https://youtu.be/" + video["id"]["videoId"]
         else:
             response = NOT_FOUND
 

@@ -7,7 +7,6 @@ class PluginManager:
     def __init__(self, client):
         self.client = client
         self.db = client.db
-        self.client.plugins = []
 
     def load(self, plugin):
         LOG.info("Loading plugin %s.", plugin.__name__)

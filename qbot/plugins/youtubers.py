@@ -15,14 +15,15 @@ from qbot.plugin import Plugin
 LOG = logging.getLogger("discord")
 NOT_FOUND = "I didn't find anything 😢..."
 
-class Platform:
+class Platform:  # pylint: disable=R0903
     def __init__(self, name):
         self.name = name
+        self.collector = None
 
-    def collector(self, collector_func):
+    def set_collector(self, collector_func):
         self.collector = collector_func
 
-class Video:
+class Video:  # pylint: disable=R0903
     def __init__(self, channel_name, channel_id, video_id):
         self.channel_name = channel_name
         self.channel_id = channel_id
@@ -30,7 +31,7 @@ class Video:
 
 YOUTUBE_PLATFORM = Platform("youtube")
 
-@YOUTUBE_PLATFORM.collector
+@YOUTUBE_PLATFORM.set_collector
 async def youtube_collector(youtubers):
     youtubers = list(map(lambda s: s.replace(" ", "_"), youtubers))
     latest_videos = []
@@ -111,10 +112,10 @@ class Youtubers(Plugin):
                         if video.channel_id in guild_youtubers:
                             data[guild.id].append(video)
 
-            except Exception as e:
+            except Exception as exception:  # pylint: disable=W0703
                 LOG.info("Cannot gather youtubers from %s", platform.name)
                 LOG.info("With youtubers: %s", ",".join(youtubers))
-                LOG.info(e)
+                LOG.exception(exception)
         return data
 
     @command(pattern="^" + PREFIX + "youtuber (.*)",
@@ -126,9 +127,9 @@ class Youtubers(Plugin):
             response = "Nnt enough arguments"
             await self.client.send_message(message.channel.id, response)
             return
-        op = cmd[0]
+        operation = cmd[0]
         channel_id = cmd[1]
-        if op == "add":
+        if operation == "add":
             url = "https://www.googleapis.com/youtube/v3/channels"
             async with aiohttp.ClientSession() as session:
                 params = {"key": GOOGLE_API_KEY, "part": "id", "id": channel_id}
@@ -161,7 +162,7 @@ class Youtubers(Plugin):
                                 (channel_id, data["items"][0]["id"]["videoId"]))
                             await conn.commit()
                             response = "Added channel {}!".format(channel_id)
-        elif op == "rm":
+        elif operation == "rm":
             async with aiosqlite.connect(self.db.path) as conn:
                 await conn.execute(
                     "DELETE FROM youtubers_{} WHERE id=?".format(
@@ -200,7 +201,7 @@ class Youtubers(Plugin):
                     continue
                 try:
                     await self.client.send_message(
-                        announcement_channel,
+                        announcement_channel[0],
                         "{} uploaded a new video! "
                         "https://www.youtube.com/watch?v={}".format(
                             video.channel_name, video.video_id)
@@ -211,5 +212,5 @@ class Youtubers(Plugin):
                             "id=?".format(guild.id),
                             (video.video_id, video.channel_id))
                         await conn.commit()
-                except Exception as e:
-                    LOG.info(e)
+                except Exception as exception:  # pylint: disable=W0703
+                    LOG.exception(exception)

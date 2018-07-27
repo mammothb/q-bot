@@ -17,17 +17,17 @@ def bg_task(sleep_time, ignore_errors=True):
                 if ignore_errors:
                     try:
                         await func(self)
-                    except Exception as e:
+                    except Exception as exception:  # pylint: disable=W0703
                         LOG.info("An error occured in the %s bg task "
                                  "retrying in %d seconds", func.__name__,
                                  sleep_time)
-                        LOG.info(e)
+                        LOG.exception(exception)
                 else:
                     await func(self)
 
                 await asyncio.sleep(sleep_time)
 
-        wrapper._bg_task = True
+        wrapper._bg_task = True  # pylint: disable=W0212
         return wrapper
 
     return actual_decorator
@@ -63,7 +63,7 @@ def command(pattern=None, user_check=None, description="", usage=None):
                      message.clean_content)
 
             await func(self, message, args)
-        wrapper._is_command = True
+        wrapper._is_command = True  # pylint: disable=W0212
         if usage:
             command_name = usage
         else:

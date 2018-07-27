@@ -15,14 +15,15 @@ from qbot.plugin import Plugin
 LOG = logging.getLogger("discord")
 NOT_FOUND = "I didn't find anything 😢..."
 
-class Platform:
+class Platform:  # pylint: disable=R0903
     def __init__(self, name):
         self.name = name
+        self.collector = None
 
-    def collector(self, collector_func):
+    def set_collector(self, collector_func):
         self.collector = collector_func
 
-class Streamer:
+class Streamer:  # pylint: disable=R0903
     def __init__(self, name, display_name, link, stream_id):
         self.name = name
         self.display_name = display_name
@@ -32,7 +33,7 @@ class Streamer:
 # Twitch
 TWITCH_PLATFORM = Platform("twitch")
 
-@TWITCH_PLATFORM.collector
+@TWITCH_PLATFORM.set_collector
 async def twitch_collector(streamers):
     streamers = list(map(lambda s: s.replace(" ", "_"), streamers))
     live_streamers = []
@@ -123,10 +124,10 @@ class Streamers(Plugin):
                                 "name='{}'".format(guild.id, streamer))
                             await conn.commit()
 
-            except Exception as e:
+            except Exception as exception:  # pylint: disable=W0703
                 LOG.info("Cannot gather live streamers from %s", platform.name)
                 LOG.info("With streamers: %s", ",".join(streamers))
-                LOG.info(e)
+                LOG.exception(exception)
         return data
 
     @command(pattern="^" + PREFIX + "streamer (.*)",
@@ -138,9 +139,9 @@ class Streamers(Plugin):
             response = "Not enough arguments"
             await self.client.send_message(message.channel.id, response)
             return
-        op = cmd[0]
+        operation = cmd[0]
         streamer_name = cmd[1]
-        if op == "add":
+        if operation == "add":
             url = "https://api.twitch.tv/kraken/search/channels"
             async with aiohttp.ClientSession() as session:
                 params = {"q": streamer_name, "client_id": TWITCH_CLIENT_ID}
@@ -159,14 +160,13 @@ class Streamers(Plugin):
                             (data["channels"][0]["name"], 0))
                         await conn.commit()
                         response = "Added streamer {}!".format(streamer_name)
-        elif op == "rm":
+        elif operation == "rm":
             async with aiosqlite.connect(self.db.path) as conn:
                 await conn.execute(
                     "DELETE FROM streamers_{} WHERE name=?".format(
                         message.guild.id), (streamer_name,))
                 await conn.commit()
-                response = "Removed streamer {}!".format(
-                    streamer_name)
+                response = "Removed streamer {}!".format(streamer_name)
         else:
             response = "Unknown command, use 'add' or 'rm'."
 
@@ -179,7 +179,6 @@ class Streamers(Plugin):
             guild = self.client.get_guild(guild_id)
             if not guild:
                 continue
-
             async with aiosqlite.connect(self.db.path) as conn:
                 cursor = await conn.execute(
                     "SELECT announcement_channel, announcement_text FROM "
@@ -216,5 +215,5 @@ class Streamers(Plugin):
                                 tbl_name, tbl_name, streamer.name,
                                 streamer.name), (streamer.stream_id, 1))
                         await conn.commit()
-                except Exception as e:
-                    LOG.info(e)
+                except Exception as exception:  # pylint: disable=W0703
+                    LOG.exception(exception)
