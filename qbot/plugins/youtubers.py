@@ -181,7 +181,6 @@ class Youtubers(Plugin):
             guild = self.client.get_guild(guild_id)
             if not guild:
                 continue
-
             async with aiosqlite.connect(self.db.path) as conn:
                 cursor = await conn.execute(
                     "SELECT announcement_channel FROM guilds WHERE id=?",

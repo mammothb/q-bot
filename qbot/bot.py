@@ -58,6 +58,9 @@ class QBot(discord.Client):
         for plugin in self.plugins:
             self.loop.create_task(plugin._on_message(message))
 
+    async def send_files(self, files, *args, **kwargs):
+        return await self.http.send_files(files=files, *args, **kwargs)
+
     async def add_all_guilds(self):
         """Syncing all the guilds to the DB"""
         LOG.debug("Syncing guilds and db")
