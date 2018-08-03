@@ -11,6 +11,7 @@ from qbot.config import GOOGLE_API_KEY
 from qbot.const import PREFIX
 from qbot.decorators import bg_task, command
 from qbot.plugin import Plugin
+from qbot.utility import replace_multiple
 
 LOG = logging.getLogger("discord")
 NOT_FOUND = "I didn't find anything 😢..."
@@ -73,10 +74,9 @@ class Youtubers(Plugin):
         for guild in guilds:
             async with aiosqlite.connect(self.db.path) as conn:
                 await conn.execute(
-                    "CREATE TABLE IF NOT EXISTS youtubers_{} (".format(
-                        guild.id) +
+                    "CREATE TABLE IF NOT EXISTS youtubers_{} ("
                     "id TEXT PRIMARY KEY,"
-                    "latest INTEGER NOT NULL);")
+                    "latest INTEGER NOT NULL);".format(guild.id))
                 await conn.commit()
         self._ready.set()
 
@@ -103,7 +103,7 @@ class Youtubers(Plugin):
             if not youtubers:
                 continue
 
-            youtubers = set(map(lambda s: re.sub("[^0-9a-zA-Z_]+", "", s),
+            youtubers = set(map(lambda s: re.sub("[^0-9a-zA-Z_-]+", "", s),
                                 youtubers))
             try:
                 latest_videos = await platform.collector(youtubers)
@@ -124,7 +124,7 @@ class Youtubers(Plugin):
     async def youtuber(self, message, args):
         cmd = args[0].split(" ")
         if len(cmd) != 2:
-            response = "Nnt enough arguments"
+            response = "Not enough arguments"
             await self.client.send_message(message.channel.id, response)
             return
         operation = cmd[0]
@@ -174,6 +174,30 @@ class Youtubers(Plugin):
 
         await self.client.send_message(message.channel.id, response)
 
+    @command(pattern="^" + PREFIX + "youtuber_setup (.*)",
+             description="Add or remove Twitch streamer from notification",
+             usage=PREFIX + "youtuber_setup msg")
+    async def youtuber_setup(self, message, args):
+        args = args[0].split(" ", 1)
+        if len(args) < 2:
+            response = "Not enough arguments"
+            await self.client.send_message(message.channel.id, response)
+            return
+        youtubers_channel = int(args[0][2:-1])
+        youtubers_text = args[1]
+        try:
+            async with aiosqlite.connect(self.db.path) as conn:
+                await conn.execute(
+                    "UPDATE guilds SET youtubers_channel=?, youtubers_text=? "
+                    "WHERE id=?", (youtubers_channel, youtubers_text,
+                                   message.guild.id))
+                await conn.commit()
+                response = "Update YouTubers annoucement text and channel!"
+        except Exception as exception:  # pylint: disable=W0703
+            LOG.exception(exception)
+            response = "Couldn't update YouTubers annoucement text and channel"
+        await self.client.send_message(message.channel.id, response)
+
     @bg_task(60 * 60)
     async def youtuber_check(self):
         data = await self.get_youtubers_by_guilds()
@@ -183,9 +207,9 @@ class Youtubers(Plugin):
                 continue
             async with aiosqlite.connect(self.db.path) as conn:
                 cursor = await conn.execute(
-                    "SELECT announcement_channel FROM guilds WHERE id=?",
-                    (guild.id,))
-                announcement_channel = await cursor.fetchone()
+                    "SELECT youtubers_channel, youtubers_text FROM guilds "
+                    "WHERE id=?", (guild.id,))
+                youtubers_channel, youtubers_text = await cursor.fetchone()
                 await cursor.close()
             for video in latest_videos:
                 async with aiosqlite.connect(self.db.path) as conn:
@@ -199,11 +223,14 @@ class Youtubers(Plugin):
                 if video.video_id in video_ids:
                     continue
                 try:
+                    rep = {
+                        "{youtuber}": video.channel_name,
+                        "{link}": "https://www.youtube.com/watch?v={}".format(
+                            video.video_id)
+                    }
                     await self.client.send_message(
-                        announcement_channel[0],
-                        "{} uploaded a new video! "
-                        "https://www.youtube.com/watch?v={}".format(
-                            video.channel_name, video.video_id)
+                        youtubers_channel,
+                        replace_multiple(rep, youtubers_text)
                     )
                     async with aiosqlite.connect(self.db.path) as conn:
                         await conn.execute(

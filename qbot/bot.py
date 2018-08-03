@@ -65,7 +65,7 @@ class QBot(discord.Client):
         """Syncing all the guilds to the DB"""
         LOG.debug("Syncing guilds and db")
         for guild in self.guilds:
-            LOG.debug("Adding guild %d\"s id to db", guild.id)
+            LOG.debug("Adding guild %d's id to db", guild.id)
             # pylint: disable=W0212
             for channel_id in guild._channels:
                 if (isinstance(guild._channels[channel_id], TextChannel) and
@@ -74,9 +74,11 @@ class QBot(discord.Client):
                     break
             async with aiosqlite.connect(self.db.path) as conn:
                 await conn.execute(
-                    "INSERT OR IGNORE INTO guilds "
-                    "(id,name,announcement_channel,announcement_text) "
-                    "VALUES(?,?,?,?)",
+                    "INSERT OR IGNORE INTO guilds ("
+                    "id,name,streamers_channel,streamers_text,"
+                    "youtubers_channel,youtubers_text) VALUES(?,?,?,?,?,?)",
                     (guild.id, guild.name, announcement_channel,
-                     "{streamer} is now live on {link} !"))
+                     "{streamer} is now live! {link}",
+                     announcement_channel,
+                     "{youtuber} uploaded a new video! {link}"))
                 await conn.commit()

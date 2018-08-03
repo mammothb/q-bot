@@ -11,6 +11,7 @@ from qbot.config import TWITCH_CLIENT_ID
 from qbot.const import PREFIX
 from qbot.decorators import bg_task, command
 from qbot.plugin import Plugin
+from qbot.utility import replace_multiple
 
 LOG = logging.getLogger("discord")
 NOT_FOUND = "I didn't find anything 😢..."
@@ -73,11 +74,10 @@ class Streamers(Plugin):
         for guild in guilds:
             async with aiosqlite.connect(self.db.path) as conn:
                 await conn.execute(
-                    "CREATE TABLE IF NOT EXISTS streamers_{} (".format(
-                        guild.id) +
+                    "CREATE TABLE IF NOT EXISTS streamers_{} ("
                     "name TEXT PRIMARY KEY,"
                     "id TEXT,"
-                    "online INTEGER NOT NULL);")
+                    "online INTEGER NOT NULL);".format(guild.id))
                 await conn.commit()
         self._ready.set()
 
@@ -120,8 +120,8 @@ class Streamers(Plugin):
                         # set offline streamer
                         async with aiosqlite.connect(self.db.path) as conn:
                             await conn.execute(
-                                "UPDATE streamers_{} SET online = 0 WHERE "
-                                "name='{}'".format(guild.id, streamer))
+                                "UPDATE streamers_{} SET online=0 WHERE "
+                                "name=?".format(guild.id), (streamer,))
                             await conn.commit()
 
             except Exception as exception:  # pylint: disable=W0703
@@ -132,10 +132,10 @@ class Streamers(Plugin):
 
     @command(pattern="^" + PREFIX + "streamer (.*)",
              description="Add or remove Twitch streamer from notification",
-             usage=PREFIX + "streamer streamer_name")
+             usage=PREFIX + "streamer (add/rm) streamer_name")
     async def streamer(self, message, args):
         cmd = args[0].split(" ")
-        if len(cmd) != 2:
+        if len(cmd) < 2:
             response = "Not enough arguments"
             await self.client.send_message(message.channel.id, response)
             return
@@ -154,9 +154,8 @@ class Streamers(Plugin):
                     # write entry using channel name instead of display name
                     async with aiosqlite.connect(self.db.path) as conn:
                         await conn.execute(
-                            "INSERT OR IGNORE INTO streamers_{} "
-                            "(name,online) VALUES(?,?)".format(
-                                message.guild.id),
+                            "INSERT OR IGNORE INTO streamers_{} (name,online) "
+                            "VALUES(?,?)".format(message.guild.id),
                             (data["channels"][0]["name"], 0))
                         await conn.commit()
                         response = "Added streamer {}!".format(streamer_name)
@@ -172,6 +171,30 @@ class Streamers(Plugin):
 
         await self.client.send_message(message.channel.id, response)
 
+    @command(pattern="^" + PREFIX + "streamer_setup (.*)",
+             description="Add or remove Twitch streamer from notification",
+             usage=PREFIX + "streamer_setup msg")
+    async def streamer_setup(self, message, args):
+        args = args[0].split(" ", 1)
+        if len(args) != 2:
+            response = "Not enough arguments"
+            await self.client.send_message(message.channel.id, response)
+            return
+        streamers_channel = int(args[0][2:-1])
+        streamers_text = args[1]
+        try:
+            async with aiosqlite.connect(self.db.path) as conn:
+                await conn.execute(
+                    "UPDATE guilds SET streamers_channel=?, streamers_text=? "
+                    "WHERE id=?", (streamers_channel, streamers_text,
+                                   message.guild.id))
+                await conn.commit()
+                response = "Update Streamers annoucement text and channel!"
+        except Exception as exception:  # pylint: disable=W0703
+            LOG.exception(exception)
+            response = "Couldn't update Streamers annoucement text and channel"
+        await self.client.send_message(message.channel.id, response)
+
     @bg_task(30)
     async def streamer_check(self):
         data = await self.get_live_streamers_by_guilds()
@@ -181,13 +204,13 @@ class Streamers(Plugin):
                 continue
             async with aiosqlite.connect(self.db.path) as conn:
                 cursor = await conn.execute(
-                    "SELECT announcement_channel, announcement_text FROM "
-                    "guilds WHERE id=?", (guild.id,))
-                announcement_channel, announcement_text = await cursor.fetchone()
+                    "SELECT streamers_channel, streamers_text FROM guilds "
+                    "WHERE id=?", (guild.id,))
+                streamers_channel, streamers_text = await cursor.fetchone()
                 await cursor.close()
             async with aiosqlite.connect(self.db.path) as conn:
                 cursor = await conn.execute(
-                    "SELECT id FROM streamers_{} WHERE online = 1".format(
+                    "SELECT id FROM streamers_{} WHERE online=1".format(
                         guild.id))
                 streamer_ids = await cursor.fetchall()
                 await cursor.close()
@@ -198,22 +221,22 @@ class Streamers(Plugin):
                 if checked:
                     continue
                 try:
+                    rep = {
+                        "{streamer}": streamer.name,
+                        "{link}": streamer.link
+                    }
                     await self.client.send_message(
-                        announcement_channel,
-                        announcement_text.replace(
-                            "{streamer}", streamer.name
-                        ).replace(
-                            "{link}", streamer.link
-                        )
+                        streamers_channel,
+                        replace_multiple(rep, streamers_text)
                     )
                     async with aiosqlite.connect(self.db.path) as conn:
                         tbl_name = "streamers_{}".format(guild.id)
                         await conn.execute(
                             "INSERT OR REPLACE INTO {} (name,id,online) "
                             "VALUES(COALESCE((SELECT name FROM {} WHERE "
-                            "name = '{}'), '{}'),?,?)".format(
-                                tbl_name, tbl_name, streamer.name,
-                                streamer.name), (streamer.stream_id, 1))
+                            "name=?),?),?,?)".format(tbl_name, tbl_name),
+                            (streamer.name, streamer.name,
+                             streamer.stream_id, 1))
                         await conn.commit()
                 except Exception as exception:  # pylint: disable=W0703
                     LOG.exception(exception)

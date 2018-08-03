@@ -15,6 +15,9 @@ class Db(object):
             await conn.execute("CREATE TABLE IF NOT EXISTS guilds ("
                                "id INTEGER PRIMARY KEY,"
                                "name TEXT NOT NULL,"
-                               "announcement_channel INTEGER NOT NULL,"
-                               "announcement_text TEXT NOT NULL);")
+                               "streamers_channel INTEGER NOT NULL,"
+                               "streamers_text TEXT NOT NULL,"
+                               "youtubers_channel INTEGER NOT NULL,"
+                               "youtubers_text TEXT NOT NULL,"
+                               "mod_roles TEXT);")
             await conn.commit()
