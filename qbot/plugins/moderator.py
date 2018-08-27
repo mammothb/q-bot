@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import logging
+import re
 
 import aiosqlite
-import asyncio
 
 from qbot.const import PREFIX
 from qbot.decorators import command
@@ -30,11 +31,17 @@ class Moderator(Plugin):
         if len(args) == 1:
             deleted = await message.channel.purge(limit=int(args[0]))
         elif len(args) == 2:
-            target_id = int(args[0][2:-1])
-            def check_id(msg):
-                return msg.author.id == target_id
-            deleted = await message.channel.purge(limit=int(args[1]),
-                                                  check=check_id)
+            try:
+                target_id = int(re.search(r"\d+", args[0]).group())
+                def check_id(msg):
+                    return msg.author.id == target_id
+                deleted = await message.channel.purge(limit=int(args[1]),
+                                                      check=check_id)
+            except Exception as exception:  # pylint: disable=W0703
+                LOG.exception(exception)
+                msg = "Invalid target user!"
+                await self.client.send_message(message.channel.id, msg)
+                return
         msg = "Deleted {} message(s)".format(len(deleted))
         confirm_msg = await self.client.send_message(message.channel.id, msg)
         await asyncio.sleep(10)
