@@ -6,6 +6,7 @@ import re
 
 import aiohttp
 import aiosqlite
+from lxml import etree as ET
 
 from qbot.config import GOOGLE_API_KEY
 from qbot.const import PREFIX
@@ -37,23 +38,40 @@ async def youtube_collector(youtubers):
     youtubers = list(map(lambda s: s.replace(" ", "_"), youtubers))
     latest_videos = []
     for channel_id in youtubers:
-        url = "https://www.googleapis.com/youtube/v3/search"
+        url = "https://www.youtube.com/feeds/videos.xml"
         async with aiohttp.ClientSession() as session:
             params = {
-                "key": GOOGLE_API_KEY,
-                "part": "snippet",
-                "channelId": channel_id,
-                "maxResults": "1",
-                "order": "date"
-                }
+                "channel_id": channel_id
+            }
             async with session.get(url, params=params) as resp:
-                result = await resp.json()
+                result = await resp.text()
+                root = ET.fromstring(result.encode("utf-8"))
+                nsmap = {k if k is not None else "default": v
+                         for k, v in root.nsmap.items()}
                 video = Video(
-                    result["items"][0]["snippet"]["channelTitle"],
-                    channel_id,
-                    result["items"][0]["id"]["videoId"]
+                    root.find(".//default:title", namespaces=nsmap).text,
+                    root.find(".//yt:channelId", namespaces=nsmap).text,
+                    root.find("./default:entry/yt:videoId",
+                              namespaces=nsmap).text
                 )
                 latest_videos.append(video)
+        # url = "https://www.googleapis.com/youtube/v3/search"
+        # async with aiohttp.ClientSession() as session:
+        #     params = {
+        #         "key": GOOGLE_API_KEY,
+        #         "part": "snippet",
+        #         "channelId": channel_id,
+        #         "maxResults": "1",
+        #         "order": "date"
+        #         }
+        #     async with session.get(url, params=params) as resp:
+        #         result = await resp.json()
+        #         video = Video(
+        #             result["items"][0]["snippet"]["channelTitle"],
+        #             channel_id,
+        #             result["items"][0]["id"]["videoId"]
+        #         )
+        #         latest_videos.append(video)
     return latest_videos
 
 class Youtubers(Plugin):
