@@ -39,11 +39,10 @@ class Search(Plugin):
             actions.move_to_element(element).perform()
             driver.save_screenshot(img_path)
             driver.quit()
-            img_file = open(img_path, "rb")
             await self.client.send_files(
-                [(img_file, os.path.basename(img_path))], message.channel.id,
+                [File(img_path, filename=os.path.basename(img_path))],
+                message.channel.id,
                 content="Google Images results for **{}**".format(search))
-            img_file.close()
         except Exception as exception:  # pylint: disable=W0703
             LOG.info("Cannot google image search with '%s'", search)
             LOG.exception(exception)
