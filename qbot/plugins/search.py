@@ -54,16 +54,17 @@ class Search(Plugin):
              usage=PREFIX + "twitch streamer_name")
     async def twitch(self, message, args):
         search = args[0]
-        url = "https://api.twitch.tv/kraken/search/channels"
+        url = "https://api.twitch.tv/helix/users"
         async with aiohttp.ClientSession() as session:
-            params = {"q": search, "client_id": TWITCH_CLIENT_ID}
-            async with session.get(url, params=params) as resp:
+            headers = {"Client-ID": TWITCH_CLIENT_ID}
+            params = {"login": search}
+            async with session.get(url, headers=headers,
+                                   params=params) as resp:
                 data = await resp.json()
-        if data["channels"]:
-            channel = data["channels"][0]
-            response = "\n**" + channel["display_name"] + "**: " + channel["url"]
-            response += " {0[followers]} followers & {0[views]} views".format(
-                channel)
+        if data["data"]:
+            channel = data["data"][0]
+            response = ("\n**" + channel["display_name"] +
+                        "**: https://twitch.tv/{}".format(channel["login"]))
         else:
             response = NOT_FOUND
 

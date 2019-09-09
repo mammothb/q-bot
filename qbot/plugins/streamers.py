@@ -25,11 +25,10 @@ class Platform:  # pylint: disable=R0903
         self.collector = collector_func
 
 class Streamer:  # pylint: disable=R0903
-    def __init__(self, name, display_name, link, stream_id):
-        self.name = name
-        self.display_name = display_name
-        self.link = link
-        self.stream_id = stream_id
+    def __init__(self, user_name, user_id):
+        self.user_name = user_name
+        self.user_id = user_id
+        self.link = f"https://www.twitch.tv/{user_name}"
 
 # Twitch
 TWITCH_PLATFORM = Platform("twitch")
@@ -40,19 +39,15 @@ async def twitch_collector(streamers):
     live_streamers = []
     for i in range(0, len(streamers), 100):
         chunk = streamers[i : i + 100]
-        url = ("https://api.twitch.tv/kraken/streams"
-               "?channel={}&limit=100".format(",".join(chunk)))
+        url = ("https://api.twitch.tv/helix/streams"
+               f"?user_id={'&user_id='.join(chunk)}&first=100")
         async with aiohttp.ClientSession() as session:
-            params = {"client_id": TWITCH_CLIENT_ID}
-            async with session.get(url, params=params) as resp:
+            headers = {"Client-ID": TWITCH_CLIENT_ID}
+            async with session.get(url, headers=headers) as resp:
                 result = await resp.json()
-                for stream in result["streams"]:
-                    streamer = Streamer(
-                        stream["channel"]["name"],
-                        stream["channel"]["display_name"],
-                        stream["channel"]["url"],
-                        str(stream["_id"])
-                    )
+                for stream in result["data"]:
+                    streamer = Streamer(stream["user_name"],
+                                        stream["user_id"])
                     live_streamers.append(streamer)
     return live_streamers
 
@@ -74,10 +69,10 @@ class Streamers(Plugin):
         for guild in guilds:
             async with aiosqlite.connect(self.db.path) as conn:
                 await conn.execute(
-                    "CREATE TABLE IF NOT EXISTS streamers_{} ("
-                    "name TEXT PRIMARY KEY,"
-                    "id TEXT,"
-                    "online INTEGER NOT NULL);".format(guild.id))
+                    f"CREATE TABLE IF NOT EXISTS streamers_{guild.id} ("
+                    "name TEXT NOT NULL,"
+                    "user_id TEXT PRIMARY KEY,"
+                    "online INTEGER NOT NULL);")
                 await conn.commit()
         self._ready.set()
 
@@ -93,7 +88,7 @@ class Streamers(Plugin):
             for guild in guilds:
                 async with aiosqlite.connect(self.db.path) as conn:
                     cursor = await conn.execute(
-                        "SELECT name FROM streamers_{}".format(guild.id))
+                        f"SELECT user_id FROM streamers_{guild.id}")
                     guild_streamers = await cursor.fetchall()
                     await cursor.close()
                 # cursor fetch all returns the entries as tuples
@@ -110,18 +105,19 @@ class Streamers(Plugin):
                 live_streamers = await platform.collector(streamers)
                 for guild, guild_streamers in temp_data.items():
                     for streamer in live_streamers:
-                        if streamer.name in guild_streamers:
+                        if streamer.user_id in guild_streamers:
                             data[guild.id].append(streamer)
-                streamer_names = [streamer.name for streamer in live_streamers]
+                streamer_ids = [streamer.user_id
+                                for streamer in live_streamers]
                 for guild in guilds:
                     for streamer in streamers:
-                        if streamer in streamer_names:
+                        if streamer in streamer_ids:
                             continue
                         # set offline streamer
                         async with aiosqlite.connect(self.db.path) as conn:
                             await conn.execute(
-                                "UPDATE streamers_{} SET online=0 WHERE "
-                                "name=?".format(guild.id), (streamer,))
+                                f"UPDATE streamers_{guild.id} SET online=0 "
+                                "WHERE user_id=?", (streamer,))
                             await conn.commit()
 
             except Exception as exception:  # pylint: disable=W0703
@@ -141,31 +137,34 @@ class Streamers(Plugin):
             return
         operation = cmd[0]
         streamer_name = cmd[1]
+        guild_id = message.guild.id
         if operation == "add":
-            url = "https://api.twitch.tv/kraken/search/channels"
+            url = "https://api.twitch.tv/helix/users"
             async with aiohttp.ClientSession() as session:
-                params = {"q": streamer_name, "client_id": TWITCH_CLIENT_ID}
+                headers = {"Client-ID": TWITCH_CLIENT_ID}
+                params = {"login": streamer_name}
                 # Check if channel exist
-                async with session.get(url, params=params) as resp:
+                async with session.get(url, headers=headers,
+                                       params=params) as resp:
                     data = await resp.json()
-                if not data["channels"]:
+                if not data["data"]:
                     response = NOT_FOUND
                 else:
                     # write entry using channel name instead of display name
                     async with aiosqlite.connect(self.db.path) as conn:
                         await conn.execute(
-                            "INSERT OR IGNORE INTO streamers_{} (name,online) "
-                            "VALUES(?,?)".format(message.guild.id),
-                            (data["channels"][0]["name"], 0))
+                            f"INSERT OR IGNORE INTO streamers_{guild_id} "
+                            "(name,user_id,online) VALUES(?,?,?)",
+                            (data["data"][0]["login"],
+                             data["data"][0]["id"], 0))
                         await conn.commit()
-                        response = "Added streamer {}!".format(streamer_name)
+                        response = f"Added streamer {streamer_name}!"
         elif operation == "rm":
             async with aiosqlite.connect(self.db.path) as conn:
-                await conn.execute(
-                    "DELETE FROM streamers_{} WHERE name=?".format(
-                        message.guild.id), (streamer_name,))
+                await conn.execute(f"DELETE FROM streamers_{guild_id} "
+                                   "WHERE name=?", (streamer_name,))
                 await conn.commit()
-                response = "Removed streamer {}!".format(streamer_name)
+                response = f"Removed streamer {streamer_name}!"
         else:
             response = "Unknown command, use 'add' or 'rm'."
 
@@ -185,14 +184,15 @@ class Streamers(Plugin):
         try:
             async with aiosqlite.connect(self.db.path) as conn:
                 await conn.execute(
-                    "UPDATE guilds SET streamers_channel=?, streamers_text=? "
-                    "WHERE id=?", (streamers_channel, streamers_text,
-                                   message.guild.id))
+                    "UPDATE guilds SET streamers_channel=?, "
+                    "streamers_text=? WHERE id=?",
+                    (streamers_channel, streamers_text, message.guild.id))
                 await conn.commit()
                 response = "Update Streamers annoucement text and channel!"
         except Exception as exception:  # pylint: disable=W0703
             LOG.exception(exception)
-            response = "Couldn't update Streamers annoucement text and channel"
+            response = ("Couldn't update Streamers annoucement text and "
+                        "channel")
         await self.client.send_message(message.channel.id, response)
 
     @bg_task(30)
@@ -210,19 +210,18 @@ class Streamers(Plugin):
                 await cursor.close()
             async with aiosqlite.connect(self.db.path) as conn:
                 cursor = await conn.execute(
-                    "SELECT id FROM streamers_{} WHERE online=1".format(
-                        guild.id))
+                    f"SELECT user_id FROM streamers_{guild.id} "
+                    "WHERE online=1")
                 streamer_ids = await cursor.fetchall()
                 await cursor.close()
-            streamer_ids = [id[0] for id in streamer_ids
-                            if id[0] != "" and id[0] is not None]
+            streamer_ids = [s[0] for s in streamer_ids]
             for streamer in live_streamers:
-                checked = streamer.stream_id in streamer_ids
+                checked = streamer.user_id in streamer_ids
                 if checked:
                     continue
                 try:
                     rep = {
-                        "{streamer}": streamer.name,
+                        "{streamer}": streamer.user_name,
                         "{link}": streamer.link
                     }
                     await self.client.send_message(
@@ -230,13 +229,9 @@ class Streamers(Plugin):
                         replace_multiple(rep, streamers_text)
                     )
                     async with aiosqlite.connect(self.db.path) as conn:
-                        tbl_name = "streamers_{}".format(guild.id)
                         await conn.execute(
-                            "INSERT OR REPLACE INTO {} (name,id,online) "
-                            "VALUES(COALESCE((SELECT name FROM {} WHERE "
-                            "name=?),?),?,?)".format(tbl_name, tbl_name),
-                            (streamer.name, streamer.name,
-                             streamer.stream_id, 1))
+                            f"UPDATE streamers_{guild.id} SET online=1 "
+                            "WHERE user_id=?", (streamer.user_id,))
                         await conn.commit()
                 except Exception as exception:  # pylint: disable=W0703
                     LOG.exception(exception)
