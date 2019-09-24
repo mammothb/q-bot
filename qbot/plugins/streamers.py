@@ -33,22 +33,29 @@ class Streamer:  # pylint: disable=R0903
 # Twitch
 TWITCH_PLATFORM = Platform("twitch")
 
+TWITCH_GET_STREAM = ("https://api.twitch.tv/helix/streams?user_id=$USER_ID$&"
+                     "first=100")
+TWITCH_GET_USER = "https://api.twitch.tv/helix/users"
+
 @TWITCH_PLATFORM.set_collector
 async def twitch_collector(streamers):
     streamers = list(map(lambda s: s.replace(" ", "_"), streamers))
     live_streamers = []
     for i in range(0, len(streamers), 100):
-        chunk = streamers[i : i + 100]
-        url = ("https://api.twitch.tv/helix/streams"
-               f"?user_id={'&user_id='.join(chunk)}&first=100")
+        user_id = "&user_id=".join(streamers[i : i + 100])
         async with aiohttp.ClientSession() as session:
             headers = {"Client-ID": TWITCH_CLIENT_ID}
-            async with session.get(url, headers=headers) as resp:
-                result = await resp.json()
-                for stream in result["data"]:
-                    streamer = Streamer(stream["user_name"],
-                                        stream["user_id"])
-                    live_streamers.append(streamer)
+            async with session.get(TWITCH_GET_STREAM.replace(
+                    "$USER_ID", user_id), headers=headers) as stream_resp:
+                stream_result = await stream_resp.json()
+                for stream in stream_result["data"]:
+                    params = {"id": stream["user_id"]}
+                    async with session.get(TWITCH_GET_USER, headers=headers,
+                                           params=params) as user_resp:
+                        user_result = (await user_resp.json())["data"][0]
+                        streamer = Streamer(user_result["login"],
+                                            stream["user_id"])
+                        live_streamers.append(streamer)
     return live_streamers
 
 class Streamers(Plugin):
@@ -139,12 +146,11 @@ class Streamers(Plugin):
         streamer_name = cmd[1]
         guild_id = message.guild.id
         if operation == "add":
-            url = "https://api.twitch.tv/helix/users"
             async with aiohttp.ClientSession() as session:
                 headers = {"Client-ID": TWITCH_CLIENT_ID}
                 params = {"login": streamer_name}
                 # Check if channel exist
-                async with session.get(url, headers=headers,
+                async with session.get(TWITCH_GET_USER, headers=headers,
                                        params=params) as resp:
                     data = await resp.json()
                 if not data["data"]:
