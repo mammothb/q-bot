@@ -46,7 +46,7 @@ async def twitch_collector(streamers):
         async with aiohttp.ClientSession() as session:
             headers = {"Client-ID": TWITCH_CLIENT_ID}
             async with session.get(TWITCH_GET_STREAM.replace(
-                    "$USER_ID", user_id), headers=headers) as stream_resp:
+                    "$USER_ID$", user_id), headers=headers) as stream_resp:
                 stream_result = await stream_resp.json()
                 for stream in stream_result["data"]:
                     params = {"id": stream["user_id"]}
