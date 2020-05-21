@@ -7,7 +7,7 @@ import re
 import aiohttp
 import aiosqlite
 
-from qbot.config import TWITCH_CLIENT_ID
+from qbot.config import TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET
 from qbot.const import PREFIX
 from qbot.decorators import bg_task, command
 from qbot.plugin import Plugin
@@ -36,6 +36,17 @@ TWITCH_PLATFORM = Platform("twitch")
 TWITCH_GET_STREAM = ("https://api.twitch.tv/helix/streams?user_id=$USER_ID$&"
                      "first=100")
 TWITCH_GET_USER = "https://api.twitch.tv/helix/users"
+TWITCH_AUTHORIZE = ("https://id.twitch.tv/oauth2/token"
+                    f"?client_id={TWITCH_CLIENT_ID}"
+                    f"&client_secret={TWITCH_CLIENT_SECRET}"
+                    "&grant_type=client_credentials")
+TWITCH_VALIDATE = "https://id.twitch.tv/oauth2/validate"
+TWITCH_ACCESS_TOKEN = ""
+
+def set_twitch_access_token(token):
+    global TWITCH_ACCESS_TOKEN
+    TWITCH_ACCESS_TOKEN = token
+    LOG.info("Updated twitch access token")
 
 @TWITCH_PLATFORM.set_collector
 async def twitch_collector(streamers):
@@ -44,10 +55,15 @@ async def twitch_collector(streamers):
     for i in range(0, len(streamers), 100):
         user_id = "&user_id=".join(streamers[i : i + 100])
         async with aiohttp.ClientSession() as session:
-            headers = {"Client-ID": TWITCH_CLIENT_ID}
+            headers = {"Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}",
+                       "Client-ID": TWITCH_CLIENT_ID}
             async with session.get(TWITCH_GET_STREAM.replace(
-                    "$USER_ID$", user_id), headers=headers) as stream_resp:
+                "$USER_ID$", user_id), headers=headers) as stream_resp:
                 stream_result = await stream_resp.json()
+                if stream_result.get("status") == 401:
+                    async with session.post(TWITCH_AUTHORIZE) as auth_resp:
+                        auth_result = await auth_resp.json()
+                        set_twitch_access_token(auth_result["access_token"])
                 for stream in stream_result["data"]:
                     params = {"id": stream["user_id"]}
                     async with session.get(TWITCH_GET_USER, headers=headers,
@@ -147,7 +163,8 @@ class Streamers(Plugin):
         guild_id = message.guild.id
         if operation == "add":
             async with aiohttp.ClientSession() as session:
-                headers = {"Client-ID": TWITCH_CLIENT_ID}
+                headers = {"Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}",
+                           "Client-ID": TWITCH_CLIENT_ID}
                 params = {"login": streamer_name}
                 # Check if channel exist
                 async with session.get(TWITCH_GET_USER, headers=headers,
